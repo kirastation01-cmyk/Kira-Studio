@@ -19,8 +19,10 @@ function httpRequest(url, options = {}) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const lib = parsed.protocol === 'https:' ? https : http;
-    const reqOpts = { hostname: parsed.hostname, path: parsed.pathname + parsed.search, method: options.method || 'GET', headers: options.headers || {} };
-    const req = lib.request(reqOpts, res => {
+    const req = lib.request({
+      hostname: parsed.hostname, path: parsed.pathname + parsed.search,
+      method: options.method || 'GET', headers: options.headers || {}
+    }, res => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
@@ -40,7 +42,10 @@ function downloadFile(url, dest) {
     const lib = url.startsWith('https') ? https : http;
     const file = fs.createWriteStream(dest);
     lib.get(url, res => {
-      if (res.statusCode === 301 || res.statusCode === 302) { file.close(); return downloadFile(res.headers.location, dest).then(resolve).catch(reject); }
+      if (res.statusCode === 301 || res.statusCode === 302) {
+        file.close();
+        return downloadFile(res.headers.location, dest).then(resolve).catch(reject);
+      }
       res.pipe(file);
       file.on('finish', () => file.close(resolve));
     }).on('error', err => { fs.unlink(dest, () => {}); reject(err); });
@@ -49,60 +54,124 @@ function downloadFile(url, dest) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// ── SCRIPT: 12 SCENES = 3 MINUTES ────────────────────────────
+// ── NICHE STYLES FOR PROMPTS ──────────────────────────────────
+const NICHE_IMAGE_STYLE = {
+  'Dark Stories':     'dark cinematic horror atmosphere, deep shadows, eerie moonlight, abandoned setting, photorealistic, unsettling',
+  'True Crime':       'dark documentary cinematic style, crime scene lighting, gritty realism, noir atmosphere, photorealistic',
+  'Khmer Legends':    'ancient Cambodian temple ruins at night, supernatural golden glow, mystical fog, Angkor Wat style, atmospheric',
+  'Motivational':     'cinematic sunrise, dramatic golden light, silhouette of person, inspiring, professional photography',
+  'Facts & Lore':     'ancient ruins, dramatic archaeological lighting, cinematic documentary, mysterious atmosphere',
+  'Relationship Drama':'cinematic emotional drama, rain on city street, moody lighting, romantic tension, film still'
+};
+
+// ── SCRIPT: REAL STORYTELLING, ~450 WORDS = 3 MINUTES ────────
+// At natural narration pace: ~150 words/min x 3 min = 450 words
+// 10 scenes, each ~45 words = rich storytelling, not just 1 sentence
 async function generateScript(niche, language, customPrompt, anthropicKey) {
-  const langInstr = language === 'Khmer' ? 'Write in Khmer. Also keep English in en field.'
-    : language === 'English + Khmer' ? 'English in en field. Khmer translation in kh field.'
-    : 'English only. Leave kh as empty string.';
+  const langInstr = language === 'English + Khmer'
+    ? 'Write the en field in English. Write kh field as Khmer translation of the same text.'
+    : language === 'Khmer'
+    ? 'Write en field in English and kh field in Khmer.'
+    : 'Write en field in English. Leave kh as empty string.';
+
+  const nicheGuide = {
+    'Dark Stories': 'A terrifying, atmospheric ghost or paranormal story. Build dread slowly. Use real sensory details — sounds, smells, feelings. Make the listener feel like it happened to a real person. End with a shocking twist.',
+    'True Crime': 'A real-feeling true crime story with a mysterious unsolved element. Use specific fake-but-realistic details like dates, locations, names. Build tension like a true crime podcast.',
+    'Khmer Legends': 'A Cambodian supernatural legend or folklore story. Reference real Cambodian locations like Angkor Wat, Tonle Sap, Phnom Penh. Mix ancient spirits with modern setting for maximum impact.',
+    'Motivational': 'A powerful rags-to-riches personal story. Be specific with struggles and numbers. Make it feel real and earned. End with actionable inspiration.',
+    'Facts & Lore': 'Mind-blowing facts about a mysterious topic. Each scene reveals something more shocking than the last. End with the most incredible fact that changes how you see everything.',
+    'Relationship Drama': 'A deeply emotional relationship story with a shocking twist. Use specific realistic details. Make the listener feel every emotion. End with a revelation.'
+  };
+
+  const guide = nicheGuide[niche] || nicheGuide['Dark Stories'];
 
   const prompt = customPrompt ||
-    `Write a viral 3-minute faceless TikTok/YouTube Shorts script about "${niche}".
+    `You are a viral TikTok/YouTube Shorts scriptwriter. Write a 3-minute faceless video script about "${niche}".
+
+STORYTELLING STYLE: ${guide}
+
 ${langInstr}
 
-EXACTLY 12 scenes. Each scene = 15 seconds = 3 minutes total.
-Hook scenes 1-2, build tension 3-6, climax 7-9, shocking reveal 10-11, CTA scene 12.
-Each scene: 1-2 short punchy sentences. Make it impossible to stop watching.
+CRITICAL REQUIREMENTS:
+- Write EXACTLY 10 scenes
+- Each scene must be 40-50 words long (this is critical for 3-minute length)
+- Write like you are telling a story to a friend at 2am — personal, scary, gripping
+- Use "I" or "she" or "he" perspective for immersion
+- Each scene ends with a hook that makes you NEED to hear the next one
+- NO generic filler. Every sentence must build tension or reveal something
+- Scene 1: Shocking hook that stops the scroll in 3 seconds
+- Scenes 2-4: Set the scene with specific creepy details
+- Scenes 5-7: Things escalate, something goes very wrong
+- Scenes 8-9: The terrifying truth is revealed
+- Scene 10: The twist ending + "follow for more" CTA
 
-Return ONLY valid JSON, no markdown:
-{"title":"title","scenes":[{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"},{"en":"text","kh":"khmer"}]}`;
+Return ONLY valid JSON, no markdown, no explanation:
+{"title":"Catchy scary title under 8 words","scenes":[
+{"en":"40-50 word scene 1 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 2 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 3 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 4 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 5 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 6 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 7 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 8 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 9 text here","kh":"khmer translation"},
+{"en":"40-50 word scene 10 text here","kh":"khmer translation"}
+]}`;
 
   const res = await httpRequest('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
-    body: { model: 'claude-haiku-4-5', max_tokens: 2048, messages: [{ role: 'user', content: prompt }] }
+    body: { model: 'claude-sonnet-4-20250514', max_tokens: 4096, messages: [{ role: 'user', content: prompt }] }
   });
 
-  if (res.status !== 200) throw new Error('Claude error ' + res.status + ': ' + JSON.stringify(res.body).slice(0,200));
+  if (res.status !== 200) throw new Error('Claude error ' + res.status + ': ' + JSON.stringify(res.body).slice(0, 300));
   const content = res.body.content;
-  if (!content || !content[0] || !content[0].text) throw new Error('Claude empty response');
+  if (!content || !content[0] || !content[0].text) throw new Error('Claude empty response: ' + JSON.stringify(res.body).slice(0,200));
 
-  const text = content[0].text.trim().replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+  const text = content[0].text.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON from Claude: ' + text.slice(0,200));
+  if (!match) throw new Error('No JSON from Claude. Got: ' + text.slice(0, 300));
 
   const parsed = JSON.parse(match[0]);
   if (!parsed.scenes || parsed.scenes.length < 4) throw new Error('Too few scenes: ' + parsed.scenes?.length);
 
-  // Ensure exactly 12 scenes
-  while (parsed.scenes.length < 12) parsed.scenes.push(parsed.scenes[parsed.scenes.length-1]);
-  parsed.scenes = parsed.scenes.slice(0, 12);
+  // Ensure exactly 10 scenes
+  while (parsed.scenes.length < 10) parsed.scenes.push(parsed.scenes[parsed.scenes.length - 1]);
+  parsed.scenes = parsed.scenes.slice(0, 10);
   return parsed;
 }
 
 // ── VOICE: ELEVENLABS ─────────────────────────────────────────
 async function generateVoice(text, voiceName, jobId, elevenLabsKey) {
-  const voiceIds = { 'Marcus':'AZnzlk1XvdvUeBnXmlld', 'Adam':'pNInz6obpgDQGcFmaJgB', 'Rachel':'21m00Tcm4TlvDq8ikWAM', 'Bella':'EXAVITQu4vr4xnSDxMaL' };
+  const voiceIds = {
+    'Marcus': 'AZnzlk1XvdvUeBnXmlld',
+    'Adam':   'pNInz6obpgDQGcFmaJgB',
+    'Rachel': '21m00Tcm4TlvDq8ikWAM',
+    'Bella':  'EXAVITQu4vr4xnSDxMaL'
+  };
   const voiceId = voiceIds[voiceName] || voiceIds['Marcus'];
   const audioPath = path.join(OUT_DIR, `${jobId}_voice.mp3`);
 
+  // Limit to 5000 chars for ElevenLabs free tier
+  const safeText = text.substring(0, 4800);
+
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ text: text.substring(0,5000), model_id:'eleven_multilingual_v2', voice_settings:{stability:0.5,similarity_boost:0.8,style:0.2} });
+    const body = JSON.stringify({
+      text: safeText,
+      model_id: 'eleven_multilingual_v2',
+      voice_settings: { stability: 0.55, similarity_boost: 0.85, style: 0.3, use_speaker_boost: true }
+    });
     const req = https.request({
-      hostname:'api.elevenlabs.io', path:`/v1/text-to-speech/${voiceId}`, method:'POST',
-      headers:{'Content-Type':'application/json','xi-api-key':elevenLabsKey,'Accept':'audio/mpeg'}
+      hostname: 'api.elevenlabs.io',
+      path: `/v1/text-to-speech/${voiceId}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'xi-api-key': elevenLabsKey, 'Accept': 'audio/mpeg' }
     }, res => {
       if (res.statusCode !== 200) {
-        const c=[]; res.on('data',x=>c.push(x)); res.on('end',()=>reject(new Error('ElevenLabs '+res.statusCode+': '+Buffer.concat(c).toString().slice(0,200)))); return;
+        const c = []; res.on('data', x => c.push(x));
+        res.on('end', () => reject(new Error('ElevenLabs ' + res.statusCode + ': ' + Buffer.concat(c).toString().slice(0, 300))));
+        return;
       }
       const file = fs.createWriteStream(audioPath);
       res.pipe(file);
@@ -115,13 +184,13 @@ async function generateVoice(text, voiceName, jobId, elevenLabsKey) {
   });
 }
 
-// ── IMAGES: FAL.AI with retry + fallback ──────────────────────
+// ── IMAGES: FAL.AI with retry ─────────────────────────────────
 async function generateImage(prompt, imgIdx, jobId, falKey, attempt) {
   attempt = attempt || 1;
   const imgPath = path.join(OUT_DIR, `${jobId}_img${imgIdx}.jpg`);
 
   try {
-    // Try fast sync endpoint first
+    // Try fast sync model first
     const res = await httpRequest('https://fal.run/fal-ai/fast-lightning-sdxl', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Key ${falKey}` },
@@ -133,123 +202,169 @@ async function generateImage(prompt, imgIdx, jobId, falKey, attempt) {
       return imgPath;
     }
 
-    // Fallback to flux/schnell queue
-    return await generateFluxQueued(prompt, imgIdx, jobId, falKey, imgPath);
+    // If queued, poll it
+    if (res.body && res.body.request_id) {
+      return await pollFal(res.body.request_id, imgPath, falKey, 'fal-ai/fast-lightning-sdxl');
+    }
+
+    // Fallback to flux/schnell
+    return await fluxQueued(prompt, imgPath, falKey);
 
   } catch(err) {
     if (attempt < 3) {
-      console.log(`Image ${imgIdx} attempt ${attempt} failed (${err.message}), retrying...`);
-      await sleep(5000);
+      console.log(`Img ${imgIdx} attempt ${attempt} failed: ${err.message} — retrying in 6s`);
+      await sleep(6000);
       return generateImage(prompt, imgIdx, jobId, falKey, attempt + 1);
     }
-    // Final fallback: use a dark cinematic Unsplash image so video still renders
-    console.log(`Image ${imgIdx} using fallback after 3 fails`);
-    const fallbacks = [
-      'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1509248961158-e54f6934749c?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1566228015668-4c45dbc4e2f5?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1531722569936-825d4ecc6416?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1483058712412-4245e9b90334?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1539650116574-8efeb43e2750?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1508193638397-1c4234db14d8?w=576&h=1024&fit=crop',
-      'https://images.unsplash.com/photo-1453847668862-487637052f8a?w=576&h=1024&fit=crop'
+    // Final fallback — dark horror placeholder
+    console.log(`Img ${imgIdx} all attempts failed — using dark fallback`);
+    const darkFallbacks = [
+      'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1509248961158-e54f6934749c?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1505322715561-75cf4ca08175?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1504701954957-2010ec3bcec1?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1519074002996-a69e7ac46a42?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1546484958-6544e8e5c0b1?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1519074069444-1ba4fff66d16?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1478358161113-b0e11994a36b?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?w=576&h=1024&fit=crop&q=80',
+      'https://images.unsplash.com/photo-1516410529446-2c777cb7366d?w=576&h=1024&fit=crop&q=80'
     ];
-    await downloadFile(fallbacks[imgIdx % fallbacks.length], imgPath);
+    await downloadFile(darkFallbacks[imgIdx % darkFallbacks.length], imgPath);
     return imgPath;
   }
 }
 
-async function generateFluxQueued(prompt, imgIdx, jobId, falKey, imgPath) {
+async function fluxQueued(prompt, imgPath, falKey) {
   const submit = await httpRequest('https://queue.fal.run/fal-ai/flux/schnell', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Key ${falKey}` },
     body: { prompt, image_size: { width: 576, height: 1024 }, num_inference_steps: 4, num_images: 1, enable_safety_checker: false }
   });
+  if (!submit.body || !submit.body.request_id) throw new Error('No request_id: ' + JSON.stringify(submit.body).slice(0,150));
+  return pollFal(submit.body.request_id, imgPath, falKey, 'fal-ai/flux/schnell');
+}
 
-  if (!submit.body || !submit.body.request_id) throw new Error('No request_id from fal: ' + JSON.stringify(submit.body).slice(0,150));
-
+async function pollFal(requestId, imgPath, falKey, model) {
   for (let i = 0; i < 25; i++) {
     await sleep(4000);
-    const s = await httpRequest(`https://queue.fal.run/fal-ai/flux/schnell/requests/${submit.body.request_id}`, { headers: { 'Authorization': `Key ${falKey}` } });
+    const s = await httpRequest(
+      `https://queue.fal.run/${model}/requests/${requestId}`,
+      { headers: { 'Authorization': `Key ${falKey}` } }
+    );
     if (s.body && s.body.status === 'COMPLETED') {
       const url = s.body.output?.images?.[0]?.url;
-      if (!url) throw new Error('No image URL');
+      if (!url) throw new Error('No image URL in response');
       await downloadFile(url, imgPath);
       return imgPath;
     }
     if (s.body && s.body.status === 'FAILED') throw new Error('Fal job failed');
   }
-  throw new Error('Fal.ai timed out');
+  throw new Error('Fal.ai poll timed out after 100s');
 }
 
-// ── IMAGE PROMPTS — 10 IMAGES FOR 12 SCENES ──────────────────
-// Distribution: scenes 0,1 → img0 | 2 → img1 | 3 → img2 | 4 → img3 | 5 → img4
-//               6 → img5 | 7 → img6 | 8 → img7 | 9 → img8 | 10,11 → img9
-// 10 unique images, more variety, 2 scenes share an image at start and end only
-const SCENE_TO_IMG = [0,0,1,2,3,4,5,6,7,8,9,9];
-
+// ── 10 IMAGE PROMPTS — one per scene ─────────────────────────
 function buildImagePrompts(niche, scenes, style) {
-  const styleMap = {
-    'Cinematic': 'cinematic film still, dramatic lighting, anamorphic lens, movie quality',
-    'Horror':    'dark horror atmosphere, eerie shadows, unsettling, hyper-realistic',
-    'Anime':     'anime art style, vibrant colors, beautiful, highly detailed',
-    'Realistic': 'photorealistic, professional photography, 8K ultra detail'
+  const nicheStyle = NICHE_IMAGE_STYLE[niche] || NICHE_IMAGE_STYLE['Dark Stories'];
+  const styleExtra = {
+    'Cinematic': 'anamorphic lens, cinematic film still, professional movie lighting',
+    'Horror':    'deep horror atmosphere, dim candlelight, abandoned building, terrifying',
+    'Anime':     'anime illustration style, vivid colors, dramatic composition',
+    'Realistic': 'photorealistic, 8K detail, professional DSLR photography'
   };
-  const s = styleMap[style] || styleMap['Cinematic'];
+  const extra = styleExtra[style] || styleExtra['Cinematic'];
 
-  // Pick 10 scenes to represent each image: indices 0,2,3,4,5,6,7,8,9,10
-  const sceneIndices = [0,2,3,4,5,6,7,8,9,10];
-  return sceneIndices.map(i => {
-    const scene = scenes[i] || scenes[0];
-    return `${scene.en}. ${s}. Vertical 9:16 portrait format. No text, no watermark, no faces.`;
+  // One image per scene (10 scenes = 10 images)
+  return scenes.map((scene, i) => {
+    // Extract a visual moment from the scene text
+    const visual = scene.en.split('.')[0]; // First sentence as visual anchor
+    return `${visual}. ${nicheStyle}. ${extra}. Vertical 9:16 portrait format. No text overlay, no watermark, no faces visible, no people recognizable.`;
   });
 }
 
-// ── ASSEMBLE 3-MINUTE MP4 ─────────────────────────────────────
+// ── ASSEMBLE: images loop to match audio duration exactly ─────
 async function assembleVideo(jobId, imagePaths, audioPath, scenes, capMode) {
   const videoPath = path.join(OUT_DIR, `${jobId}_final.mp4`);
-  const SEG = 15;
 
   const hasFfmpeg = await new Promise(resolve => { exec('ffmpeg -version', err => resolve(!err)); });
   if (!hasFfmpeg) {
-    fs.writeFileSync(videoPath, JSON.stringify({ note:'Install FFmpeg for real MP4', scenes:scenes.map(s=>s.en) }));
+    fs.writeFileSync(videoPath, JSON.stringify({ note: 'FFmpeg not installed', scenes: scenes.map(s => s.en) }));
     return videoPath;
   }
 
+  // Get actual audio duration first
+  const audioDuration = await new Promise((resolve) => {
+    exec(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`, (err, stdout) => {
+      const dur = parseFloat(stdout);
+      resolve(isNaN(dur) ? 180 : dur); // fallback to 180s if probe fails
+    });
+  });
+
+  console.log(`Audio duration: ${audioDuration}s`);
+
+  // Each scene gets equal time based on actual audio length
+  const segDur = audioDuration / scenes.length;
+  const totalScenes = scenes.length;
+
   const listPath = path.join(OUT_DIR, `${jobId}_list.txt`);
   let list = '';
-  for (let i = 0; i < 12; i++) {
-    const imgIdx = SCENE_TO_IMG[i];
-    const img = imagePaths[imgIdx] || imagePaths[imagePaths.length-1];
-    list += `file '${img}'\nduration ${SEG}\n`;
+  for (let i = 0; i < totalScenes; i++) {
+    const img = imagePaths[i] || imagePaths[imagePaths.length - 1];
+    list += `file '${img}'\nduration ${segDur.toFixed(3)}\n`;
   }
-  list += `file '${imagePaths[imagePaths.length-1]}'`;
+  list += `file '${imagePaths[imagePaths.length - 1]}'`;
   fs.writeFileSync(listPath, list);
 
+  // Build caption filters synced to actual audio timing
   let vf = 'scale=576:1024:force_original_aspect_ratio=decrease,pad=576:1024:(ow-iw)/2:(oh-ih)/2,setsar=1';
+
   if (capMode && capMode !== 'NONE') {
     const filters = scenes.map((s, i) => {
-      const t0 = i*SEG, t1 = t0+SEG;
-      const txt = capMode === 'KH' ? (s.kh||s.en) : s.en;
-      const safe = (txt||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/:/g,'\\:').replace(/[\[\]]/g,'\\$&');
-      let f = `drawtext=fontsize=26:fontcolor=white:x=(w-text_w)/2:y=h-110:text='${safe}':enable='between(t\\,${t0}\\,${t1})':box=1:boxcolor=black@0.6:boxborderw=8`;
+      const t0 = (i * segDur).toFixed(2);
+      const t1 = ((i + 1) * segDur).toFixed(2);
+      const txt = capMode === 'KH' ? (s.kh || s.en) : s.en;
+      // Word wrap: split into lines of ~35 chars
+      const words = (txt || '').split(' ');
+      let lines = [], line = '';
+      words.forEach(w => {
+        if ((line + ' ' + w).trim().length > 32) { lines.push(line.trim()); line = w; }
+        else line = (line + ' ' + w).trim();
+      });
+      if (line) lines.push(line);
+      // Show first 2 lines only in caption (keep it readable)
+      const capText = lines.slice(0, 2).join(' / ');
+      const safe = capText.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/:/g,'\\:').replace(/[\[\]]/g,'\\$&').replace(/,/g,'\\,');
+
+      let f = `drawtext=fontsize=28:fontcolor=white:x=(w-text_w)/2:y=h*0.82:text='${safe}':enable='between(t\\,${t0}\\,${t1})':box=1:boxcolor=black@0.65:boxborderw=10:line_spacing=6`;
+
       if (capMode === 'BOTH' && s.kh) {
-        const sk = (s.kh||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/:/g,'\\:').replace(/[\[\]]/g,'\\$&');
-        f += `,drawtext=fontsize=18:fontcolor=yellow:x=(w-text_w)/2:y=h-72:text='${sk}':enable='between(t\\,${t0}\\,${t1})':box=1:boxcolor=black@0.5:boxborderw=5`;
+        const kh = (s.kh || '').split('.')[0]; // First sentence only for Khmer
+        const safekh = kh.replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/:/g,'\\:').replace(/[\[\]]/g,'\\$&').replace(/,/g,'\\,');
+        f += `,drawtext=fontsize=20:fontcolor=#FFD700:x=(w-text_w)/2:y=h*0.88:text='${safekh}':enable='between(t\\,${t0}\\,${t1})':box=1:boxcolor=black@0.55:boxborderw=7`;
       }
       return f;
     });
     vf += ',' + filters.join(',');
   }
 
-  const cmd = ['ffmpeg -y', `-f concat -safe 0 -i "${listPath}"`, `-i "${audioPath}"`, `-vf "${vf}"`, '-c:v libx264 -preset fast -crf 23', '-c:a aac -b:a 128k -shortest -pix_fmt yuv420p', `"${videoPath}"`].join(' ');
+  const cmd = [
+    'ffmpeg -y',
+    `-f concat -safe 0 -i "${listPath}"`,
+    `-i "${audioPath}"`,
+    `-vf "${vf}"`,
+    '-c:v libx264 -preset fast -crf 22',
+    '-c:a aac -b:a 128k',
+    '-map 0:v -map 1:a',  // explicitly map video from images, audio from file
+    '-shortest',           // cut to shortest stream (audio)
+    '-pix_fmt yuv420p',
+    `"${videoPath}"`
+  ].join(' ');
 
+  console.log('Running FFmpeg...');
   await new Promise((resolve, reject) => {
-    exec(cmd, { timeout: 300000 }, (err, so, se) => {
-      if (err) { console.error('FFmpeg:', se); reject(new Error('FFmpeg: ' + se.slice(-400))); }
-      else resolve();
+    exec(cmd, { timeout: 360000 }, (err, stdout, stderr) => {
+      if (err) { console.error('FFmpeg error:', stderr.slice(-600)); reject(new Error('FFmpeg failed: ' + stderr.slice(-400))); }
+      else { console.log('FFmpeg complete'); resolve(); }
     });
   });
 
@@ -273,51 +388,86 @@ app.post('/api/generate', async (req, res) => {
   if (!falKey)        return res.status(400).json({ error: 'Missing Fal.ai API key' });
 
   const jobId = 'job_' + Date.now();
-  jobs[jobId] = { id:jobId, status:'rendering', step:'Starting...', progress:0, createdAt:new Date().toISOString() };
+  jobs[jobId] = { id: jobId, status: 'rendering', step: 'Starting...', progress: 0, createdAt: new Date().toISOString() };
   res.json({ jobId });
 
   (async () => {
     try {
-      jobs[jobId].step = 'Writing 3-min script with Claude...'; jobs[jobId].progress = 3;
-      const script = await generateScript(niche||'Dark Stories', language||'English', customPrompt, anthropicKey);
-      jobs[jobId].step = `✓ Script ready — ${script.scenes.length} scenes (3 min)`; jobs[jobId].progress = 15; jobs[jobId].script = script;
+      // 1. Script — real storytelling ~450 words
+      jobs[jobId].step = 'Writing 3-min story with Claude Sonnet...'; jobs[jobId].progress = 3;
+      const script = await generateScript(niche || 'Dark Stories', language || 'English', customPrompt, anthropicKey);
+      const wordCount = script.scenes.map(s => s.en.split(' ').length).reduce((a,b)=>a+b,0);
+      jobs[jobId].step = `✓ Script ready — ${script.scenes.length} scenes, ~${wordCount} words`; jobs[jobId].progress = 15;
+      jobs[jobId].script = script;
 
-      jobs[jobId].step = 'Generating voice with ElevenLabs...'; jobs[jobId].progress = 17;
-      const audioPath = await generateVoice(script.scenes.map(s=>s.en).join('. '), voice||'Marcus', jobId, elevenLabsKey);
-      jobs[jobId].step = '✓ Voice ready'; jobs[jobId].progress = 32;
+      // 2. Voice
+      jobs[jobId].step = 'Generating voice narration with ElevenLabs...'; jobs[jobId].progress = 17;
+      const fullText = script.scenes.map(s => s.en).join(' ... ');
+      const audioPath = await generateVoice(fullText, voice || 'Marcus', jobId, elevenLabsKey);
+      jobs[jobId].step = '✓ Voice narration ready'; jobs[jobId].progress = 32;
 
-      const prompts = buildImagePrompts(niche, script.scenes, style||'Cinematic');
+      // 3. Images — 1 per scene = 10 images
+      const prompts = buildImagePrompts(niche, script.scenes, style || 'Cinematic');
       const imagePaths = [];
       for (let i = 0; i < prompts.length; i++) {
-        jobs[jobId].step = `Generating image ${i+1} of 10 with Fal.ai...`; jobs[jobId].progress = 32 + (i * 5);
-        imagePaths.push(await generateImage(prompts[i], i, jobId, falKey));
+        jobs[jobId].step = `Generating scene image ${i + 1} of ${prompts.length}...`;
+        jobs[jobId].progress = 32 + Math.round((i / prompts.length) * 45);
+        const imgPath = await generateImage(prompts[i], i, jobId, falKey);
+        imagePaths.push(imgPath);
       }
-      jobs[jobId].step = '✓ All 10 images ready'; jobs[jobId].progress = 82;
+      jobs[jobId].step = `✓ All ${imagePaths.length} scene images ready`; jobs[jobId].progress = 77;
 
-      jobs[jobId].step = 'Assembling 3-minute MP4 with FFmpeg...'; jobs[jobId].progress = 84;
-      const videoPath = await assembleVideo(jobId, imagePaths, audioPath, script.scenes, capMode||'BOTH');
+      // 4. Assemble — video matches audio duration exactly
+      jobs[jobId].step = 'Assembling final video with FFmpeg...'; jobs[jobId].progress = 79;
+      const videoPath = await assembleVideo(jobId, imagePaths, audioPath, script.scenes, capMode || 'BOTH');
 
-      jobs[jobId] = { ...jobs[jobId], status:'complete', step:'✓ 3-minute video is ready!', progress:100,
-        title:script.title||(niche+' Story'), script, videoUrl:'/output/'+path.basename(videoPath),
-        duration:'3:00', sceneCount:12, imageCount:10, completedAt:new Date().toISOString() };
+      jobs[jobId] = {
+        ...jobs[jobId],
+        status: 'complete',
+        step: `✓ Video ready! (${script.scenes.length} scenes, ~${Math.round(wordCount / 150)} min)`,
+        progress: 100,
+        title: script.title || (niche + ' Story'),
+        script,
+        videoUrl: '/output/' + path.basename(videoPath),
+        sceneCount: script.scenes.length,
+        imageCount: imagePaths.length,
+        wordCount,
+        completedAt: new Date().toISOString()
+      };
 
     } catch(err) {
-      console.error('Job error:', err.message);
-      jobs[jobId].status = 'failed'; jobs[jobId].step = 'Error: ' + err.message; jobs[jobId].progress = 0;
+      console.error('Job failed:', err.message);
+      jobs[jobId].status = 'failed';
+      jobs[jobId].step = 'Error: ' + err.message;
+      jobs[jobId].progress = 0;
     }
   })();
 });
 
-app.get('/api/job/:id', (req,res) => { const j=jobs[req.params.id]; j?res.json(j):res.status(404).json({error:'Not found'}); });
-app.get('/api/jobs', (req,res) => { res.json(Object.values(jobs).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))); });
-app.get('/api/health', (req,res) => {
-  res.json({ status:'ok', hasAnthropicKey:!!process.env.ANTHROPIC_API_KEY, hasElevenLabsKey:!!process.env.ELEVENLABS_API_KEY, hasFalKey:!!process.env.FAL_API_KEY, hasTikTokToken:!!process.env.TIKTOK_ACCESS_TOKEN, hasYouTubeToken:!!process.env.YOUTUBE_ACCESS_TOKEN, version:'3-min-10img', timestamp:new Date().toISOString() });
+app.get('/api/job/:id', (req, res) => {
+  const j = jobs[req.params.id];
+  j ? res.json(j) : res.status(404).json({ error: 'Not found' });
+});
+app.get('/api/jobs', (req, res) => {
+  res.json(Object.values(jobs).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+});
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    version: 'v4-real-storytelling-10img',
+    hasAnthropicKey:  !!process.env.ANTHROPIC_API_KEY,
+    hasElevenLabsKey: !!process.env.ELEVENLABS_API_KEY,
+    hasFalKey:        !!process.env.FAL_API_KEY,
+    hasTikTokToken:   !!process.env.TIKTOK_ACCESS_TOKEN,
+    hasYouTubeToken:  !!process.env.YOUTUBE_ACCESS_TOKEN,
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.use(express.static(path.join(__dirname,'public')));
-app.get('/', (req,res) => {
-  const f=path.join(__dirname,'public','index.html');
-  fs.existsSync(f)?res.sendFile(f):res.json({status:'Kira Studio API running'});
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => {
+  const f = path.join(__dirname, 'public', 'index.html');
+  fs.existsSync(f) ? res.sendFile(f) : res.json({ status: 'Kira Studio API v4 running' });
 });
 
-app.listen(PORT, () => console.log(`Kira Studio server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Kira Studio v4 running on port ${PORT}`));
